@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible Sietch failure.
+title: "Bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Remove private paths, machine details, and catalog content before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: Explain what happened and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use synthetic files and neutral paths.
+    validations:
+      required: true
