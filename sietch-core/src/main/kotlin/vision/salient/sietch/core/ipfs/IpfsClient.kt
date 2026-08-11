@@ -23,8 +23,13 @@ import kotlin.io.path.name
  * CIDs (UnixFS DAG chunking) without reimplementing in Kotlin.
  *
  * @param apiUrl Base URL of the Kubo API, e.g. "http://localhost:5001"
+ * @param gatewayBaseUrl Explicit gateway base. Defaults to the conventional
+ * Kubo port only for backward compatibility with existing callers.
  */
-class IpfsClient(private val apiUrl: String) {
+class IpfsClient(
+    private val apiUrl: String,
+    private val gatewayBaseUrl: String = apiUrl.replace(":5001", ":8080")
+) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -53,6 +58,22 @@ class IpfsClient(private val apiUrl: String) {
     private data class IdResponse(
         val ID: String,
         val AgentVersion: String? = null
+    )
+
+    @Serializable
+    private data class BlockPutResponse(
+        val Key: String,
+        val Size: Int
+    )
+
+    @Serializable
+    private data class PinListResponse(
+        val Keys: Map<String, PinEntry> = emptyMap()
+    )
+
+    @Serializable
+    private data class PinEntry(
+        val Type: String
     )
 
     /**
@@ -102,6 +123,32 @@ class IpfsClient(private val apiUrl: String) {
     }
 
     /**
+     * Store exact bytes as a raw CIDv1 block. The returned Kubo CID must match
+     * the deterministic content CID or publication fails closed.
+     */
+    suspend fun putRawBlock(bytes: ByteArray, pin: Boolean = true): String {
+        val expectedCid = RawCid.fromBytes(bytes)
+        val response = client.post("$apiUrl/api/v0/block/put") {
+            parameter("format", "raw")
+            parameter("mhtype", "sha2-256")
+            parameter("mhlen", "32")
+            parameter("pin", pin.toString())
+            setBody(MultiPartFormDataContent(formData {
+                append("file", bytes, Headers.build {
+                    append(HttpHeaders.ContentDisposition, "filename=block")
+                    append(HttpHeaders.ContentType, ContentType.Application.OctetStream.toString())
+                })
+            }))
+        }
+        require(response.status.isSuccess()) { "Kubo raw block publication failed with ${response.status}" }
+        val publishedCid = json.decodeFromString<BlockPutResponse>(response.bodyAsText()).Key
+        require(publishedCid == expectedCid) {
+            "Kubo returned $publishedCid for raw content expected to be $expectedCid"
+        }
+        return publishedCid
+    }
+
+    /**
      * Retrieve file content by CID from the IPFS network.
      */
     suspend fun cat(cid: String): ByteArray {
@@ -119,6 +166,18 @@ class IpfsClient(private val apiUrl: String) {
             parameter("arg", cid)
         }
     }
+
+    /** Return the Kubo pin type, or null when this node does not pin the CID. */
+    suspend fun pinType(cid: String): String? {
+        val response = client.post("$apiUrl/api/v0/pin/ls") {
+            parameter("arg", cid)
+            parameter("type", "all")
+        }
+        if (response.status == HttpStatusCode.NotFound || !response.status.isSuccess()) return null
+        return json.decodeFromString<PinListResponse>(response.bodyAsText()).Keys[cid]?.Type
+    }
+
+    suspend fun isPinned(cid: String): Boolean = pinType(cid) != null
 
     /**
      * Unpin content on this IPFS node, allowing garbage collection.
@@ -157,8 +216,7 @@ class IpfsClient(private val apiUrl: String) {
      * If filename is provided, appends ?filename= so browsers save with a real name.
      */
     fun gatewayUrl(cid: String, filename: String? = null): String {
-        val gatewayBase = apiUrl.replace(":5001", ":8080")
-        val base = "$gatewayBase/ipfs/$cid"
+        val base = "${gatewayBaseUrl.trimEnd('/')}/ipfs/$cid"
         return if (filename != null) "$base?filename=$filename" else base
     }
 
@@ -169,8 +227,7 @@ class IpfsClient(private val apiUrl: String) {
      * @return the number of bytes written
      */
     suspend fun fetchToFile(cid: String, outputPath: Path): Long {
-        val gatewayBase = apiUrl.replace(":5001", ":8080")
-        val response = client.get("$gatewayBase/ipfs/$cid")
+        val response = client.get(gatewayUrl(cid))
         val channel = response.bodyAsChannel()
         var totalBytes = 0L
         Files.newOutputStream(outputPath).use { out ->

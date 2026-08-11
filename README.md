@@ -9,6 +9,9 @@ IPFS-backed universal content index. Catalogs files with content-addressed ident
 
 Sietch indexes directory trees and produces catalogs with:
 - **IPFS CIDs** — content-addressed identifiers computed via Kubo
+- **Raw CID vectors** — deterministic CIDv1/raw/sha2-256 identifiers computed
+  locally for exact protocol bytes, with fail-closed Kubo block publication and
+  pin verification
 - **SHA-256 hashes** — cryptographic integrity verification
 - **File sizes** — space accounting
 - **Location tracking** — which files live on which machines
