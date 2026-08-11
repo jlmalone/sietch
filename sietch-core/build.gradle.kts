@@ -5,13 +5,13 @@ plugins {
 }
 
 group = "vision.salient.sietch"
-version = "2.2.0"
+version = "2.2.1"
 
 repositories {
     mavenCentral()
 }
 
-val ktorVersion = "3.0.3"
+val ktorVersion = "2.3.12"
 
 dependencies {
     // HTTP client for Kubo IPFS API

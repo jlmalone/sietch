@@ -1,14 +1,14 @@
 package vision.salient.sietch.core.ipfs
 
 import io.ktor.client.*
+import io.ktor.client.call.body
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
-import kotlinx.io.asSource
-import kotlinx.io.buffered
+import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
@@ -88,7 +88,7 @@ class IpfsClient(
             parameter("cid-version", "1")
             setBody(MultiPartFormDataContent(formData {
                 append("file", ChannelProvider(fileSize) {
-                    ByteReadChannel(Files.newInputStream(file).asSource().buffered())
+                    Files.newInputStream(file).toByteReadChannel()
                 }, Headers.build {
                     append(HttpHeaders.ContentDisposition, "filename=\"${file.name}\"")
                 })
@@ -111,7 +111,7 @@ class IpfsClient(
             parameter("cid-version", "1")
             setBody(MultiPartFormDataContent(formData {
                 append("file", ChannelProvider(fileSize) {
-                    ByteReadChannel(Files.newInputStream(file).asSource().buffered())
+                    Files.newInputStream(file).toByteReadChannel()
                 }, Headers.build {
                     append(HttpHeaders.ContentDisposition, "filename=\"${file.name}\"")
                 })
@@ -155,7 +155,7 @@ class IpfsClient(
         val response = client.post("$apiUrl/api/v0/cat") {
             parameter("arg", cid)
         }
-        return response.readRawBytes()
+        return response.body()
     }
 
     /**
